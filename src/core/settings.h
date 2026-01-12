@@ -108,4 +108,6 @@ void setMacAddressMenu();
 
 void enableBLEAPI();
 
+void setFirmwareUpdateSettings();
+
 #endif

@@ -1570,3 +1570,147 @@ window.addEventListener('popstate', (event) => {
     }, 100); // Small delay to ensure the file list is loaded first
   }
 })();
+
+// Firmware update functions
+async function checkFirmwareStatus() {
+  try {
+    Dialog.loading.show('Checking firmware status...');
+    const response = await requestGet('/firmwarestatus');
+    const status = JSON.parse(response);
+    updateFirmwareStatusDisplay(status);
+  } catch (error) {
+    console.error('Failed to check firmware status:', error);
+    updateFirmwareStatusDisplay({status: 'error', message: error.message});
+  } finally {
+    Dialog.loading.hide();
+  }
+}
+
+function updateFirmwareStatusDisplay(status) {
+  const content = document.getElementById('firmware-status-content');
+  
+  if (status.status === 'uploaded') {
+    content.innerHTML = `
+      <div style="color: #02de02;">
+        <strong>Firmware Available:</strong><br>
+        File: ${status.file}<br>
+        Size: ${formatBytes(status.size)}<br>
+        MD5: ${status.md5}
+      </div>
+    `;
+  } else if (status.status === 'none') {
+    content.innerHTML = '<div style="color: #666;">No firmware update available</div>';
+  } else {
+    content.innerHTML = `<div style="color: #ff4444;">Error: ${status.message || 'Unknown error'}</div>`;
+  }
+}
+
+async function uploadFirmware() {
+  const fileInput = document.getElementById('firmware-file-input');
+  const md5Input = document.getElementById('firmware-md5-input');
+  const storageSelect = document.getElementById('firmware-storage-select');
+  
+  if (!fileInput.files || fileInput.files.length === 0) {
+    alert('Please select a firmware file');
+    return;
+  }
+  
+  const file = fileInput.files[0];
+  const expectedMD5 = md5Input.value.trim();
+  const storage = storageSelect.value;
+  
+  try {
+    Dialog.loading.show('Uploading firmware...');
+    
+    // Create form data
+    const formData = new FormData();
+    formData.append('firmware', file);
+    if (expectedMD5) {
+      formData.append('md5', expectedMD5);
+    }
+    formData.append('storage', storage);
+    
+    // Upload via fetch
+    const response = await fetch('/firmwareupload', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Cookie': document.cookie
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    
+    if (result.status === 'success') {
+      alert('Firmware uploaded successfully!');
+      await checkFirmwareStatus();
+    } else {
+      throw new Error(result.message || 'Upload failed');
+    }
+  } catch (error) {
+    console.error('Firmware upload failed:', error);
+    alert('Firmware upload failed: ' + error.message);
+  } finally {
+    Dialog.loading.hide();
+  }
+}
+
+async function flashFirmware() {
+  if (!confirm('Are you sure you want to flash this firmware? The device will restart and update on boot.')) {
+    return;
+  }
+  
+  try {
+    Dialog.loading.show('Scheduling firmware update...');
+    
+    const response = await requestPost('/firmwareflash', {});
+    
+    if (response.includes('success')) {
+      alert('Firmware update scheduled! The device will update on next reboot.');
+      await checkFirmwareStatus();
+    } else {
+      throw new Error('Failed to schedule update');
+    }
+  } catch (error) {
+    console.error('Failed to schedule firmware update:', error);
+    alert('Failed to schedule update: ' + error.message);
+  } finally {
+    Dialog.loading.hide();
+  }
+}
+
+async function clearFirmware() {
+  if (!confirm('Are you sure you want to clear the pending firmware?')) {
+    return;
+  }
+  
+  try {
+    Dialog.loading.show('Clearing pending firmware...');
+    
+    const response = await requestPost('/firmwareclear', {});
+    
+    if (response.includes('success')) {
+      alert('Firmware cleared successfully!');
+      await checkFirmwareStatus();
+    } else {
+      throw new Error('Failed to clear firmware');
+    }
+  } catch (error) {
+    console.error('Failed to clear firmware:', error);
+    alert('Failed to clear firmware: ' + error.message);
+  } finally {
+    Dialog.loading.hide();
+  }
+}
+
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
