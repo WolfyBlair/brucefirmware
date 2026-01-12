@@ -29,8 +29,8 @@ private:
     // Authentication methods
     void authMenu();
     void tokenFromFile();
-    void captivePortalAuth();
     void oauthFlow();
+    void captivePortalAuth();
     
     // Utility methods
     String getCurrentProviderDisplay();

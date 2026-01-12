@@ -105,6 +105,54 @@ void GitProviderMenu::selectProviderMenu() {
     loopOptions(options, MENU_TYPE_SUBMENU, "Select Provider");
 }
 
+void GitProviderMenu::captivePortalAuth() {
+    if (!currentProvider) {
+        displayInfo("Error: No provider selected", true);
+        return;
+    }
+    
+    // Create QR code portal
+    QRCodeCaptivePortal portal(currentProvider, currentProviderName);
+    
+    if (portal.startPortal("Bruce-Git-Setup")) {
+        String info = "QR Code Portal Started!\n\n";
+        info += "1. Connect to WiFi: " + portal.portalSSID + "\n";
+        info += "2. Open browser to: http://" + portal.getAccessPointIP() + "\n";
+        info += "3. Scan QR code or enter token\n";
+        info += "4. Complete authentication\n\n";
+        info += "Press any key to stop portal";
+        
+        displayInfo(info, true);
+        portal.displayQRCode(portal.generateQRData());
+        
+        // Wait for user input or token
+        while (!check(AnyKeyPress)) {
+            portal.loop();
+            
+            // Check if token was received
+            if (portal.hasTokenReceived()) {
+                String token = portal.getReceivedToken();
+                if (currentProvider->begin(token)) {
+                    portal.stopPortal();
+                    GitUser user = currentProvider->getUserInfo();
+                    displayInfo("Authenticated as: " + user.login, true);
+                    setCurrentProvider(currentProviderType, currentProvider);
+                    return;
+                } else {
+                    displayInfo("Authentication failed: " + currentProvider->getLastError(), true);
+                }
+            }
+            
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+        }
+        
+        portal.stopPortal();
+        displayInfo("Portal stopped", true);
+    } else {
+        displayInfo("Failed to start portal", true);
+    }
+}
+
 void GitProviderMenu::manageCurrentProvider() {
     if (!currentProvider) {
         displayInfo("Error: No provider selected", true);
@@ -115,6 +163,7 @@ void GitProviderMenu::manageCurrentProvider() {
     options = {
         {"Authenticate", [this]() { authMenu(); }},
         {"Token from File", [this]() { tokenFromFile(); }},
+        {"QR Code Portal", [this]() { captivePortalAuth(); }},
         { "Test Connection", [this]() {
             displayInfo("Testing connection...", true);
             if (currentProvider) {
