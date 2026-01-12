@@ -2,7 +2,10 @@
 #include "core/display.h"
 #include "core/settings.h"
 #include "core/utils.h"
+#include "core/wifi/wifi_common.h"
+#include "core/wifi/webInterface.h"
 #include "modules/github/github_app.h"
+#include "modules/github/github_oauth.h"
 
 void GitHubMenu::optionsMenu() {
     returnToMenu = false;
@@ -10,7 +13,10 @@ void GitHubMenu::optionsMenu() {
     
     if (!githubApp.isAuthenticated()) {
         options = {
-            {"Authenticate", [this]() { authMenu(); }},
+            {"Demo OAuth", [this]() { demoOAuth(); }},
+            {"OAuth via AP", [this]() { authOAuthAP(); }},
+            {"Manual Token", [this]() { authMenu(); }},
+            {"Token from File", [this]() { tokenFromFile(); }},
             {"Back", [this]() { returnToMenu = true; }}
         };
     } else {
@@ -48,10 +54,178 @@ void GitHubMenu::optionsMenu() {
     loopOptions(options, MENU_TYPE_SUBMENU, "GitHub");
 }
 
+void GitHubMenu::authOAuthAP() {
+    // Check if OAuth is configured
+    if (bruceConfig.githubClientId.length() == 0 || bruceConfig.githubClientSecret.length() == 0) {
+        displayInfo("OAuth not configured.\nConfigure Client ID/Secret first.", true);
+        return;
+    }
+    
+    // Configure OAuth with saved credentials
+    githubOAuth.setClientId(bruceConfig.githubClientId);
+    githubOAuth.setClientSecret(bruceConfig.githubClientSecret);
+    
+    if (WiFi.getMode() != WIFI_MODE_STA && WiFi.getMode() != WIFI_MODE_APSTA) {
+        displayInfo("WiFi connection required for OAuth", true);
+        return;
+    }
+    
+    if (WiFi.status() != WL_CONNECTED) {
+        displayInfo("Connecting to WiFi first...", true);
+        if (!wifiConnectMenu()) {
+            displayInfo("WiFi connection failed", true);
+            return;
+        }
+    }
+    
+    // Start OAuth flow
+    if (githubOAuth.startOAuthFlow(server)) {
+        githubOAuth.setupOAuthRoutes(server);
+        
+        // Start access point for OAuth
+        githubOAuth.startAccessPoint("Bruce-GitHub-Auth");
+        
+        // Show instructions
+        String info = "OAuth Access Point Started!\n\n";
+        info += "1. Connect to WiFi: Bruce-GitHub-Auth\n";
+        info += "2. Open browser and go to:\n";
+        info += "   172.0.0.1 or any website\n";
+        info += "3. Click 'Authorize with GitHub'\n";
+        info += "4. Complete GitHub authorization\n";
+        info += "5. Return here when done\n\n";
+        info += "Press any key to stop AP";
+        
+        displayInfo(info, true);
+        
+        // Wait for user input or OAuth completion
+        while (!check(AnyKeyPress)) {
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+            
+            // Check if OAuth completed
+            if (githubApp.isAuthenticated()) {
+                githubOAuth.stopOAuthFlow();
+                githubOAuth.stopAccessPoint();
+                displayInfo("OAuth authentication successful!", true);
+                return;
+            }
+        }
+        
+        // Stop OAuth flow if user pressed key
+        githubOAuth.stopOAuthFlow();
+        githubOAuth.stopAccessPoint();
+        displayInfo("OAuth flow cancelled", true);
+    } else {
+        displayInfo("Failed to start OAuth flow", true);
+    }
+}
+
+void GitHubMenu::demoOAuth() {
+    // Demo OAuth that simulates the flow without requiring real GitHub app
+    githubOAuth.startAccessPoint("Bruce-GitHub-Demo");
+    
+    String info = "Demo OAuth Access Point!\n\n";
+    info += "This simulates OAuth flow\n";
+    info += "1. Connect to: Bruce-GitHub-Demo\n";
+    info += "2. Go to any website\n";
+    info += "3. You'll see demo auth page\n";
+    info += "4. Click authorize to simulate\n\n";
+    info += "Press any key to stop demo";
+    
+    displayInfo(info, true);
+    
+    // Start demo web server on the access point
+    AsyncWebServer demoServer(80);
+    
+    // Demo authentication page
+    demoServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        String html = R"(
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GitHub OAuth Demo - Bruce ESP32</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f6f8fa; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #24292e; text-align: center; }
+        .demo-btn { display: block; width: 100%; padding: 12px 16px; background: #0366d6; color: white; text-decoration: none; text-align: center; border-radius: 6px; font-weight: bold; margin: 20px 0; }
+        .demo-btn:hover { background: #0256cc; }
+        .info { background: #fff8dc; padding: 15px; border-radius: 6px; margin: 20px 0; border: 1px solid #f0e68c; }
+        .logo { text-align: center; font-size: 48px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🐙</div>
+        <h1>GitHub OAuth Demo</h1>
+        <div class="info">
+            <h3>Demo Mode Active</h3>
+            <p>This is a demonstration of the OAuth flow. In a real implementation, this would redirect to GitHub for authentication.</p>
+            <p><strong>Demo Token:</strong> demo_token_12345</p>
+        </div>
+        <a href="/github/simulate-auth" class="demo-btn">Simulate Authorization</a>
+        <div class="info">
+            <strong>Note:</strong> This is a demo. Real OAuth requires GitHub app registration.
+        </div>
+    </div>
+</body>
+</html>
+        )";
+        request->send(200, "text/html", html);
+    });
+    
+    // Simulate successful authorization
+    demoServer.on("/github/simulate-auth", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // Simulate storing a demo token
+        bruceConfig.setGitHubToken("demo_token_12345");
+        
+        String html = R"(
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Demo Auth Successful</title>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f6f8fa; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
+        .success { color: #28a745; font-size: 48px; margin-bottom: 20px; }
+    </style>
+    <script>
+        setTimeout(function() {
+            window.close();
+        }, 2000);
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="success">✓</div>
+        <h1>Demo Authorization Successful!</h1>
+        <p>Demo token has been stored on the device.</p>
+        <p>This window will close automatically.</p>
+    </div>
+</body>
+</html>
+        )";
+        request->send(200, "text/html", html);
+    });
+    
+    demoServer.begin();
+    
+    // Wait for user to stop demo
+    while (!check(AnyKeyPress)) {
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
+    
+    demoServer.end();
+    githubOAuth.stopAccessPoint();
+    displayInfo("Demo OAuth stopped", true);
+}
+
 void GitHubMenu::authMenu() {
     options.clear();
     options = {
-        {"Token Setup", [this]() {
+        {"Manual Token", [this]() {
             String token = password("GitHub Personal Access Token:");
             if (token.length() > 0) {
                 displayInfo("Authenticating...", true);
@@ -62,34 +236,35 @@ void GitHubMenu::authMenu() {
                 }
             }
         }},
-        {"Token from File", [this]() {
-            String tokenFile = selectFile("Select token file:", {"txt"});
-            if (tokenFile.length() > 0) {
-                File file = SD.open(tokenFile);
-                if (file) {
-                    String token = file.readString();
-                    token.trim();
-                    file.close();
-                    
-                    if (token.length() > 0) {
-                        displayInfo("Authenticating...", true);
-                        if (githubApp.begin(token)) {
-                            displayInfo("Authenticated as: " + githubApp.getUserInfo().login, true);
-                        } else {
-                            displayInfo("Authentication failed: " + githubApp.getLastError(), true);
-                        }
-                    } else {
-                        displayInfo("Empty token file", true);
-                    }
-                } else {
-                    displayInfo("Cannot read token file", true);
-                }
-            }
-        }},
         {"Back", [this]() { optionsMenu(); }}
     };
     
     loopOptions(options, MENU_TYPE_SUBMENU, "GitHub Auth");
+}
+
+void GitHubMenu::tokenFromFile() {
+    String tokenFile = selectFile("Select token file:", {"txt"});
+    if (tokenFile.length() > 0) {
+        File file = SD.open(tokenFile);
+        if (file) {
+            String token = file.readString();
+            token.trim();
+            file.close();
+            
+            if (token.length() > 0) {
+                displayInfo("Authenticating...", true);
+                if (githubApp.begin(token)) {
+                    displayInfo("Authenticated as: " + githubApp.getUserInfo().login, true);
+                } else {
+                    displayInfo("Authentication failed: " + githubApp.getLastError(), true);
+                }
+            } else {
+                displayInfo("Empty token file", true);
+            }
+        } else {
+            displayInfo("Cannot read token file", true);
+        }
+    }
 }
 
 void GitHubMenu::repoMenu() {
@@ -334,6 +509,20 @@ void GitHubMenu::fileMenu() {
 void GitHubMenu::configMenu() {
     options.clear();
     options = {
+        {"Set Client ID", [this]() {
+            String clientId = keyboard("GitHub OAuth Client ID:");
+            if (clientId.length() > 0) {
+                bruceConfig.setGitHubClientId(clientId);
+                displayInfo("Client ID saved!", true);
+            }
+        }},
+        {"Set Client Secret", [this]() {
+            String clientSecret = password("GitHub OAuth Client Secret:");
+            if (clientSecret.length() > 0) {
+                bruceConfig.setGitHubClientSecret(clientSecret);
+                displayInfo("Client Secret saved!", true);
+            }
+        }},
         {"Set Default Repo", [this]() {
             String defaultRepo = keyboard("Default repository (owner/repo):");
             if (defaultRepo.length() > 0) {
@@ -343,13 +532,15 @@ void GitHubMenu::configMenu() {
         }},
         {"View Config", [this]() {
             String configInfo = "Default Repo: " + bruceConfig.githubDefaultRepo + "\n";
-            configInfo += "Enabled: " + String(bruceConfig.githubEnabled ? "Yes" : "No");
-            configInfo += "\nAuthenticated: " + String(githubApp.isAuthenticated() ? "Yes" : "No");
+            configInfo += "Client ID: " + (bruceConfig.githubClientId.length() > 0 ? "Configured" : "Not set") + "\n";
+            configInfo += "Client Secret: " + (bruceConfig.githubClientSecret.length() > 0 ? "Configured" : "Not set") + "\n";
+            configInfo += "OAuth Enabled: " + String(bruceConfig.githubOAuthEnabled ? "Yes" : "No") + "\n";
+            configInfo += "Authenticated: " + String(githubApp.isAuthenticated() ? "Yes" : "No");
             displayInfo(configInfo, true);
         }},
-        {"Toggle Enable", [this]() {
-            bruceConfig.setGitHubEnabled(!bruceConfig.githubEnabled);
-            displayInfo("GitHub " + String(bruceConfig.githubEnabled ? "enabled" : "disabled"), true);
+        {"Toggle OAuth", [this]() {
+            bruceConfig.setGitHubOAuthEnabled(!bruceConfig.githubOAuthEnabled);
+            displayInfo("OAuth " + String(bruceConfig.githubOAuthEnabled ? "enabled" : "disabled"), true);
         }},
         {"Back", [this]() { optionsMenu(); }}
     };

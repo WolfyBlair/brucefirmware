@@ -22,7 +22,10 @@ JsonDocument BruceConfig::toJson() const {
     // GitHub
     setting["githubDefaultRepo"] = githubDefaultRepo;
     setting["githubToken"] = githubToken;
+    setting["githubClientId"] = githubClientId;
+    setting["githubClientSecret"] = githubClientSecret;
     setting["githubEnabled"] = githubEnabled;
+    setting["githubOAuthEnabled"] = githubOAuthEnabled;
 
 #ifdef HAS_RGB_LED
     setting["ledBright"] = ledBright;
@@ -200,10 +203,23 @@ void BruceConfig::fromFile(bool checkFS) {
     if (!setting["githubToken"].isNull()) {
         githubToken = setting["githubToken"].as<String>();
     }
+    if (!setting["githubClientId"].isNull()) {
+        githubClientId = setting["githubClientId"].as<String>();
+    }
+    if (!setting["githubClientSecret"].isNull()) {
+        githubClientSecret = setting["githubClientSecret"].as<String>();
+    }
     if (!setting["githubEnabled"].isNull()) {
         githubEnabled = setting["githubEnabled"].as<bool>();
     } else {
         githubEnabled = true;
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["githubOAuthEnabled"].isNull()) {
+        githubOAuthEnabled = setting["githubOAuthEnabled"].as<bool>();
+    } else {
+        githubOAuthEnabled = false;
         count++;
         log_e("Fail");
     }
@@ -831,5 +847,27 @@ void BruceConfig::setGitHubEnabled(bool value) {
 void BruceConfig::validateGitHubEnabled() {
     if (githubEnabled != true && githubEnabled != false) {
         githubEnabled = true;
+    }
+}
+
+void BruceConfig::setGitHubClientId(const String& value) {
+    githubClientId = value;
+    saveFile();
+}
+
+void BruceConfig::setGitHubClientSecret(const String& value) {
+    githubClientSecret = value;
+    saveFile();
+}
+
+void BruceConfig::setGitHubOAuthEnabled(bool value) {
+    githubOAuthEnabled = value;
+    validateGitHubOAuthEnabled();
+    saveFile();
+}
+
+void BruceConfig::validateGitHubOAuthEnabled() {
+    if (githubOAuthEnabled != true && githubOAuthEnabled != false) {
+        githubOAuthEnabled = false;
     }
 }

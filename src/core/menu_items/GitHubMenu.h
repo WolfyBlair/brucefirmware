@@ -15,6 +15,9 @@ public:
 private:
     void configMenu(void);
     void authMenu(void);
+    void authOAuthAP(void);
+    void demoOAuth(void);
+    void tokenFromFile(void);
     void repoMenu(void);
     void issueMenu(void);
     void userMenu(void);
