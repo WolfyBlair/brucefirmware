@@ -1,0 +1,25 @@
+#ifndef __GITHUB_MENU_H__
+#define __GITHUB_MENU_H__
+
+#include <MenuItemInterface.h>
+
+class GitHubMenu : public MenuItemInterface {
+public:
+    GitHubMenu() : MenuItemInterface("GitHub") {}
+
+    void optionsMenu(void) override;
+    void drawIcon(float scale) override;
+    void drawIconImg() override;
+    bool getTheme() override { return bruceConfig.theme.github; }
+
+private:
+    void configMenu(void);
+    void authMenu(void);
+    void repoMenu(void);
+    void issueMenu(void);
+    void userMenu(void);
+    void gistMenu(void);
+    void fileMenu(void);
+};
+
+#endif
