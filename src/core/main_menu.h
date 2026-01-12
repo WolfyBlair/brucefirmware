@@ -11,6 +11,7 @@
 #include "menu_items/FMMenu.h"
 #include "menu_items/FileMenu.h"
 #include "menu_items/GitHubMenu.h"
+#include "menu_items/GitProviderMenu.h"
 #include "menu_items/GpsMenu.h"
 #include "menu_items/IRMenu.h"
 #include "menu_items/LoRaMenu.h"
@@ -25,6 +26,7 @@ public:
     FileMenu fileMenu;
     BleMenu bleMenu;
     GitHubMenu githubMenu;
+    GitProviderMenu gitProviderMenu;
     ClockMenu clockMenu;
     ConnectMenu connectMenu;
     ConfigMenu configMenu;
@@ -41,7 +43,6 @@ public:
     LoRaMenu loraMenu;
     EthernetMenu ethernetMenu;
 #endif
-    GitHubMenu githubMenu;
 
     MainMenu();
     ~MainMenu();
