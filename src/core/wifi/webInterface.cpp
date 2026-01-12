@@ -7,6 +7,7 @@
 #include "core/settings.h"
 #include "core/utils.h"
 #include "core/wifi/wifi_common.h" // using common wifisetup
+#include "core/firmware_update.h"
 #include "esp_task_wdt.h"
 #include "webFiles.h"
 #include <MD5Builder.h>
@@ -550,6 +551,38 @@ void configureWebServer() {
     // Reboot device
     server->on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (checkUserWebAuth(request)) { ESP.restart(); }
+    });
+
+    // Firmware update routes
+    server->on("/firmwarestatus", HTTP_GET, [](AsyncWebServerRequest *request) {
+        handleFirmwareStatus(request);
+    });
+
+    server->on("/firmwareflash", HTTP_POST, [](AsyncWebServerRequest *request) {
+        handleFirmwareFlash(request);
+    });
+
+    server->on("/firmwareclear", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (!checkUserWebAuth(request)) return;
+        clearPendingFirmware();
+        request->send(200, "application/json", "{\"status\":\"success\",\"message\":\"Firmware cleared\"}");
+    });
+
+    server->on("/firmwareupload", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (!request->url().endsWith("/firmwareupload")) {
+            request->send(404);
+            return;
+        }
+        // This endpoint is handled by onUpload
+        request->send(200);
+    });
+
+    server->onUpload([](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
+        if (request->url() == "/firmwareupload") {
+            handleFirmwareUpload(request, filename, index, data, len, final);
+        } else {
+            handleUpload(request, filename, index, data, len, final);
+        }
     });
 
     // List files

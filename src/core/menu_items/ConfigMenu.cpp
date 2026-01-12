@@ -1,5 +1,6 @@
 #include "ConfigMenu.h"
 #include "core/display.h"
+#include "core/firmware_update.h"
 #include "core/i2c_finder.h"
 #include "core/main_menu.h"
 #include "core/settings.h"
@@ -16,6 +17,7 @@ void ConfigMenu::optionsMenu() {
         {"Orientation", lambdaHelper(gsetRotation, true)},
         {"UI Color", setUIColor},
         {"UI Theme", setTheme},
+        {"Firmware Update", setFirmwareUpdateSettings},
         {String("InstaBoot: " + String(bruceConfig.instantBoot ? "ON" : "OFF")),
          [=]() {
              bruceConfig.instantBoot = !bruceConfig.instantBoot;

@@ -489,3 +489,48 @@ svg > g, svg > path {
     transform: rotate(360deg);
   }
 }
+
+/* Firmware Update Dialog Styles */
+.firmware-status h4,
+.firmware-upload h4,
+.firmware-actions h4 {
+  color: var(--color);
+  margin: 10px 0 5px 0;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.firmware-upload input,
+.firmware-upload select {
+  width: 100%;
+  padding: 8px;
+  margin: 5px 0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.firmware-upload button,
+.firmware-actions button {
+  margin: 5px;
+  padding: 8px 16px;
+  background: var(--color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.firmware-upload button:hover,
+.firmware-actions button:hover {
+  opacity: 0.8;
+}
+
+#firmware-status-content {
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
