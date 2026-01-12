@@ -19,6 +19,14 @@ JsonDocument BruceConfig::toJson() const {
     setting["wifiAtStartup"] = wifiAtStartup;
     setting["instantBoot"] = instantBoot;
 
+    // GitHub
+    setting["githubDefaultRepo"] = githubDefaultRepo;
+    setting["githubToken"] = githubToken;
+    setting["githubClientId"] = githubClientId;
+    setting["githubClientSecret"] = githubClientSecret;
+    setting["githubEnabled"] = githubEnabled;
+    setting["githubOAuthEnabled"] = githubOAuthEnabled;
+
 #ifdef HAS_RGB_LED
     setting["ledBright"] = ledBright;
     setting["ledColor"] = String(ledColor, HEX);
@@ -184,6 +192,34 @@ void BruceConfig::fromFile(bool checkFS) {
     if (!setting["instantBoot"].isNull()) {
         instantBoot = setting["instantBoot"].as<int>();
     } else {
+        count++;
+        log_e("Fail");
+    }
+
+    // GitHub
+    if (!setting["githubDefaultRepo"].isNull()) {
+        githubDefaultRepo = setting["githubDefaultRepo"].as<String>();
+    }
+    if (!setting["githubToken"].isNull()) {
+        githubToken = setting["githubToken"].as<String>();
+    }
+    if (!setting["githubClientId"].isNull()) {
+        githubClientId = setting["githubClientId"].as<String>();
+    }
+    if (!setting["githubClientSecret"].isNull()) {
+        githubClientSecret = setting["githubClientSecret"].as<String>();
+    }
+    if (!setting["githubEnabled"].isNull()) {
+        githubEnabled = setting["githubEnabled"].as<bool>();
+    } else {
+        githubEnabled = true;
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["githubOAuthEnabled"].isNull()) {
+        githubOAuthEnabled = setting["githubOAuthEnabled"].as<bool>();
+    } else {
+        githubOAuthEnabled = false;
         count++;
         log_e("Fail");
     }
@@ -789,4 +825,49 @@ bool BruceConfig::isValidWebUISession(const String &token) {
 
     saveFile();
     return true;
+}
+
+// GitHub configuration methods
+void BruceConfig::setGitHubDefaultRepo(const String& value) {
+    githubDefaultRepo = value;
+    saveFile();
+}
+
+void BruceConfig::setGitHubToken(const String& value) {
+    githubToken = value;
+    saveFile();
+}
+
+void BruceConfig::setGitHubEnabled(bool value) {
+    githubEnabled = value;
+    validateGitHubEnabled();
+    saveFile();
+}
+
+void BruceConfig::validateGitHubEnabled() {
+    if (githubEnabled != true && githubEnabled != false) {
+        githubEnabled = true;
+    }
+}
+
+void BruceConfig::setGitHubClientId(const String& value) {
+    githubClientId = value;
+    saveFile();
+}
+
+void BruceConfig::setGitHubClientSecret(const String& value) {
+    githubClientSecret = value;
+    saveFile();
+}
+
+void BruceConfig::setGitHubOAuthEnabled(bool value) {
+    githubOAuthEnabled = value;
+    validateGitHubOAuthEnabled();
+    saveFile();
+}
+
+void BruceConfig::validateGitHubOAuthEnabled() {
+    if (githubOAuthEnabled != true && githubOAuthEnabled != false) {
+        githubOAuthEnabled = false;
+    }
 }

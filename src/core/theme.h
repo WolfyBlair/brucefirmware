@@ -22,6 +22,7 @@ struct themeFiles {
     String clock = "";
     String connect = "";
     String config = "";
+    String github = "";
     String boot_img = "";
     String boot_sound = "";
     String lora = "";
@@ -48,6 +49,7 @@ struct themeInfo {
     bool clock = false;
     bool connect = false;
     bool config = false;
+    bool github = false;
     bool boot_img = false;
     bool boot_sound = false;
     bool lora = false;

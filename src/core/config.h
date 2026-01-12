@@ -44,6 +44,14 @@ public:
     int wifiAtStartup = 0;
     int instantBoot = 0;
 
+    // GitHub
+    String githubDefaultRepo = "";
+    String githubToken = "";
+    String githubClientId = "";
+    String githubClientSecret = "";
+    bool githubEnabled = true;
+    bool githubOAuthEnabled = false;
+
 #ifdef HAS_RGB_LED
     // Led
     int ledBright = 50;
@@ -175,6 +183,16 @@ public:
     void validateBadUSBBLEKeyDelay();
     void addDisabledMenu(String value);
     // TODO: removeDisabledMenu(String value);
+
+    // GitHub
+    void setGitHubDefaultRepo(const String& value);
+    void setGitHubToken(const String& value);
+    void setGitHubEnabled(bool value);
+    void setGitHubClientId(const String& value);
+    void setGitHubClientSecret(const String& value);
+    void setGitHubOAuthEnabled(bool value);
+    void validateGitHubEnabled();
+    void validateGitHubOAuthEnabled();
 
     void addWebUISession(const String &token);
     void removeWebUISession(const String &token);

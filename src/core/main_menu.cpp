@@ -7,6 +7,7 @@ MainMenu::MainMenu() {
     _menuItems = {
         &wifiMenu,
         &bleMenu,
+        &githubMenu,
 #if !defined(LITE_VERSION)
         &ethernetMenu,
 #endif
@@ -31,6 +32,7 @@ MainMenu::MainMenu() {
         &connectMenu,
 #endif
         &configMenu,
+        &githubMenu,
     };
 
     _totalItems = _menuItems.size();
