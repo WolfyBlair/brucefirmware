@@ -21,6 +21,12 @@ private:
     void tokenFromFile(void);
     void repoMenu(void);
     void issueMenu(void);
+    void listIssuesMenu(void);
+    void createIssueMenu(void);
+    void createAdvancedIssueMenu(void);
+    void issueTemplatesMenu(void);
+    void displayIssuesList(const std::vector<GitHubIssue>& issues, const String& repo);
+    String selectFromList(const String& prompt, const std::vector<String>& options);
     void userMenu(void);
     void gistMenu(void);
     void fileMenu(void);

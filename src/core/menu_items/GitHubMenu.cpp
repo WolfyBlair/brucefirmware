@@ -380,52 +380,221 @@ void GitHubMenu::repoMenu() {
 void GitHubMenu::issueMenu() {
     options.clear();
     options = {
-        {"List Issues", [this]() {
-            String owner = keyboard("Repository owner:");
-            if (owner.length() > 0) {
-                String repo = keyboard("Repository name:");
-                if (repo.length() > 0) {
-                    displayInfo("Loading issues...", true);
-                    auto issues = githubApp.listIssues(owner, repo);
-                    
-                    if (issues.size() > 0) {
-                        String result = "Issues in " + owner + "/" + repo + " (" + String(issues.size()) + "):";
-                        for (size_t i = 0; i < issues.size() && i < 10; i++) {
-                            result += "\n#" + String(issues[i].number) + " " + issues[i].title + " [" + issues[i].state + "]";
-                        }
-                        if (issues.size() > 10) {
-                            result += "\n... and " + String(issues.size() - 10) + " more";
-                        }
-                        displayInfo(result, true);
-                    } else {
-                        displayInfo("No issues found", true);
-                    }
-                }
-            }
-        }},
-        {"Create Issue", [this]() {
-            String owner = keyboard("Repository owner:");
-            if (owner.length() > 0) {
-                String repo = keyboard("Repository name:");
-                if (repo.length() > 0) {
-                    String title = keyboard("Issue title:");
-                    if (title.length() > 0) {
-                        String body = keyboard("Issue description (optional):");
-                        
-                        displayInfo("Creating issue...", true);
-                        if (githubApp.createIssue(owner, repo, title, body)) {
-                            displayInfo("Issue created successfully!", true);
-                        } else {
-                            displayInfo("Failed to create issue: " + githubApp.getLastError(), true);
-                        }
-                    }
-                }
-            }
-        }},
+        {"List Issues", [this]() { listIssuesMenu(); }},
+        {"Create Issue", [this]() { createIssueMenu(); }},
+        {"Advanced Create", [this]() { createAdvancedIssueMenu(); }},
+        {"Issue Templates", [this]() { issueTemplatesMenu(); }},
         {"Back", [this]() { optionsMenu(); }}
     };
     
     loopOptions(options, MENU_TYPE_SUBMENU, "Issue Ops");
+}
+
+void GitHubMenu::listIssuesMenu() {
+    String owner = keyboard("Repository owner:");
+    if (owner.length() > 0) {
+        String repo = keyboard("Repository name:");
+        if (repo.length() > 0) {
+            options.clear();
+            options = {
+                {"Open Issues", [this, owner, repo]() {
+                    displayInfo("Loading open issues...", true);
+                    auto issues = githubApp.listIssues(owner, repo, "open");
+                    displayIssuesList(issues, owner + "/" + repo);
+                }},
+                {"Closed Issues", [this, owner, repo]() {
+                    displayInfo("Loading closed issues...", true);
+                    auto issues = githubApp.listIssues(owner, repo, "closed");
+                    displayIssuesList(issues, owner + "/" + repo);
+                }},
+                {"All Issues", [this, owner, repo]() {
+                    displayInfo("Loading all issues...", true);
+                    auto issues = githubApp.listIssues(owner, repo, "all");
+                    displayIssuesList(issues, owner + "/" + repo);
+                }},
+                {"Back", [this]() { issueMenu(); }}
+            };
+            
+            loopOptions(options, MENU_TYPE_SUBMENU, "List Issues");
+        }
+    }
+}
+
+void GitHubMenu::createIssueMenu() {
+    String owner = keyboard("Repository owner:");
+    if (owner.length() > 0) {
+        String repo = keyboard("Repository name:");
+        if (repo.length() > 0) {
+            String title = keyboard("Issue title:");
+            if (title.length() > 0) {
+                String body = keyboard("Issue description (optional):");
+                
+                displayInfo("Creating issue...", true);
+                if (githubApp.createIssue(owner, repo, title, body)) {
+                    displayInfo("Issue created successfully!", true);
+                } else {
+                    displayInfo("Failed to create issue: " + githubApp.getLastError(), true);
+                }
+            }
+        }
+    }
+}
+
+void GitHubMenu::createAdvancedIssueMenu() {
+    String owner = keyboard("Repository owner:");
+    if (owner.length() > 0) {
+        String repo = keyboard("Repository name:");
+        if (repo.length() > 0) {
+            GitHubIssueCreate issueData;
+            
+            // Title
+            issueData.title = keyboard("Issue title:");
+            if (issueData.title.length() == 0) return;
+            
+            // Body
+            issueData.body = keyboard("Issue description:");
+            
+            // Labels
+            auto labels = githubApp.getAvailableLabels(owner, repo);
+            if (labels.size() > 0) {
+                String labelSelection = selectFromList("Add labels (comma-separated):", labels);
+                if (labelSelection.length() > 0) {
+                    // Parse comma-separated labels
+                    int start = 0;
+                    int end = labelSelection.indexOf(',');
+                    while (end >= 0 || start < labelSelection.length()) {
+                        if (end < 0) end = labelSelection.length();
+                        String label = labelSelection.substring(start, end);
+                        label.trim();
+                        if (label.length() > 0) {
+                            issueData.labels.push_back(label);
+                        }
+                        start = end + 1;
+                        end = labelSelection.indexOf(',', start);
+                    }
+                }
+            }
+            
+            // Assignees
+            auto assignees = githubApp.getAvailableAssignees(owner, repo);
+            if (assignees.size() > 0) {
+                String assigneeSelection = selectFromList("Add assignees (comma-separated):", assignees);
+                if (assigneeSelection.length() > 0) {
+                    // Parse comma-separated assignees
+                    int start = 0;
+                    int end = assigneeSelection.indexOf(',');
+                    while (end >= 0 || start < assigneeSelection.length()) {
+                        if (end < 0) end = assigneeSelection.length();
+                        String assignee = assigneeSelection.substring(start, end);
+                        assignee.trim();
+                        if (assignee.length() > 0) {
+                            issueData.assignees.push_back(assignee);
+                        }
+                        start = end + 1;
+                        end = assigneeSelection.indexOf(',', start);
+                    }
+                }
+            }
+            
+            // Milestone
+            auto milestones = githubApp.getAvailableMilestones(owner, repo);
+            if (milestones.size() > 0) {
+                String milestone = selectFromList("Select milestone:", milestones);
+                if (milestone.length() > 0) {
+                    issueData.milestone = milestone;
+                }
+            }
+            
+            // Draft option
+            issueData.draft = confirmDialog("Create as draft?", false);
+            
+            displayInfo("Creating advanced issue...", true);
+            if (githubApp.createIssueEx(owner, repo, issueData)) {
+                displayInfo("Advanced issue created successfully!", true);
+            } else {
+                displayInfo("Failed to create issue: " + githubApp.getLastError(), true);
+            }
+        }
+    }
+}
+
+void GitHubMenu::issueTemplatesMenu() {
+    String owner = keyboard("Repository owner:");
+    if (owner.length() > 0) {
+        String repo = keyboard("Repository name:");
+        if (repo.length() > 0) {
+            auto templates = githubApp.listIssueTemplates(owner, repo);
+            
+            std::vector<String> templateNames;
+            for (const auto& template : templates) {
+                templateNames.push_back(template.name);
+            }
+            
+            if (templateNames.size() > 0) {
+                String selectedTemplate = selectFromList("Select template:", templateNames);
+                
+                for (const auto& template : templates) {
+                    if (template.name == selectedTemplate) {
+                        String content = githubApp.getIssueTemplateContent(owner, repo, template.name);
+                        
+                        // Edit the template content
+                        String filledContent = keyboard("Template content (edit as needed):");
+                        if (filledContent.length() > 0) {
+                            GitHubIssueCreate issueData;
+                            issueData.title = keyboard("Issue title:");
+                            issueData.body = filledContent;
+                            issueData.labels.push_back(template.labels);
+                            
+                            displayInfo("Creating issue from template...", true);
+                            if (githubApp.createIssueEx(owner, repo, issueData)) {
+                                displayInfo("Template issue created successfully!", true);
+                            } else {
+                                displayInfo("Failed to create issue: " + githubApp.getLastError(), true);
+                            }
+                        }
+                        break;
+                    }
+                }
+            } else {
+                displayInfo("No templates available", true);
+            }
+        }
+    }
+}
+
+void GitHubMenu::displayIssuesList(const std::vector<GitHubIssue>& issues, const String& repo) {
+    if (issues.size() > 0) {
+        String result = "Issues in " + repo + " (" + String(issues.size()) + "):";
+        for (size_t i = 0; i < issues.size() && i < 10; i++) {
+            result += "\n#" + String(issues[i].number) + " " + issues[i].title + " [" + issues[i].state + "]";
+            if (issues[i].labels.size() > 0) {
+                result += " [";
+                for (size_t j = 0; j < issues[i].labels.size(); j++) {
+                    if (j > 0) result += ",";
+                    result += issues[i].labels[j];
+                }
+                result += "]";
+            }
+            if (issues[i].assignees.size() > 0) {
+                result += " @" + issues[i].assignees[0];
+            }
+        }
+        if (issues.size() > 10) {
+            result += "\n... and " + String(issues.size() - 10) + " more";
+        }
+        displayInfo(result, true);
+    } else {
+        displayInfo("No issues found", true);
+    }
+}
+
+String GitHubMenu::selectFromList(const String& prompt, const std::vector<String>& options) {
+    // This is a simplified implementation
+    // In a real implementation, you might want to show a numbered list
+    // and let the user select by number
+    
+    String selection = keyboard(prompt + " (type exact name):");
+    return selection;
 }
 
 void GitHubMenu::userMenu() {

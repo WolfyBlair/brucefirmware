@@ -237,22 +237,501 @@ GitHubIssue GitHubApp::getIssue(const String& owner, const String& repo, int iss
     return result;
 }
 
-bool GitHubApp::createIssue(const String& owner, const String& repo, const String& title, const String& body) {
+bool GitHubApp::createIssueEx(const String& owner, const String& repo, const GitHubIssueCreate& issueData) {
     if (!config.authenticated) {
         lastError = "Not authenticated";
         return false;
     }
     
+    if (!validateIssueData(issueData)) {
+        lastError = "Invalid issue data";
+        return false;
+    }
+    
     String url = buildUrl("/repos/" + owner + "/" + repo + "/issues");
     
+    // Build JSON payload
     String data = "{";
-    data += "\"title\":\"" + title + "\",";
-    data += "\"body\":\"" + body + "\"";
+    data += "\"title\":\"" + escapeJson(issueData.title) + "\",";
+    data += "\"body\":\"" + escapeJson(issueData.body) + "\"";
+    
+    // Add labels if provided
+    if (issueData.labels.size() > 0) {
+        data += ",\"labels\":[";
+        for (size_t i = 0; i < issueData.labels.size(); i++) {
+            if (i > 0) data += ",";
+            data += "\"" + issueData.labels[i] + "\"";
+        }
+        data += "]";
+    }
+    
+    // Add assignees if provided
+    if (issueData.assignees.size() > 0) {
+        data += ",\"assignees\":[";
+        for (size_t i = 0; i < issueData.assignees.size(); i++) {
+            if (i > 0) data += ",";
+            data += "\"" + issueData.assignees[i] + "\"";
+        }
+        data += "]";
+    }
+    
+    // Add milestone if provided
+    if (issueData.milestone.length() > 0) {
+        data += ",\"milestone\":\"" + issueData.milestone + "\"";
+    }
+    
+    // Add draft flag if true
+    if (issueData.draft) {
+        data += ",\"draft\":true";
+    }
+    
     data += "}";
     
     bool success = makeRequest("POST", url, data);
     http.end();
     return success;
+}
+
+bool GitHubApp::reopenIssue(const String& owner, const String& repo, int issueNumber) {
+    if (!config.authenticated) {
+        lastError = "Not authenticated";
+        return false;
+    }
+    
+    String url = buildUrl("/repos/" + owner + "/" + repo + "/issues/" + String(issueNumber));
+    
+    String data = "{\"state\":\"open\"}";
+    
+    bool success = makeRequest("PATCH", url, data);
+    http.end();
+    return success;
+}
+
+bool GitHubApp::updateIssue(const String& owner, const String& repo, int issueNumber, const GitHubIssueCreate& issueData) {
+    if (!config.authenticated) {
+        lastError = "Not authenticated";
+        return false;
+    }
+    
+    if (!validateIssueData(issueData)) {
+        lastError = "Invalid issue data";
+        return false;
+    }
+    
+    String url = buildUrl("/repos/" + owner + "/" + repo + "/issues/" + String(issueNumber));
+    
+    // Build JSON payload for update
+    String data = "{";
+    data += "\"title\":\"" + escapeJson(issueData.title) + "\",";
+    data += "\"body\":\"" + escapeJson(issueData.body) + "\"";
+    
+    // Note: For updates, labels and assignees need to be managed separately
+    // through the specific endpoints
+    
+    data += "}";
+    
+    bool success = makeRequest("PATCH", url, data);
+    http.end();
+    return success;
+}
+
+std::vector<GitHubIssueComment> GitHubApp::listIssueComments(const String& owner, const String& repo, int issueNumber) {
+    std::vector<GitHubIssueComment> comments;
+    
+    if (!config.authenticated) {
+        lastError = "Not authenticated";
+        return comments;
+    }
+    
+    String url = buildUrl("/repos/" + owner + "/" + repo + "/issues/" + String(issueNumber) + "/comments");
+    
+    if (makeRequest("GET", url)) {
+        String response = http.getString();
+        // Simple parsing for comments array
+        int start = 0;
+        while (true) {
+            int objStart = response.indexOf("{", start);
+            if (objStart < 0) break;
+            
+            int objEnd = response.indexOf("}", objStart);
+            if (objEnd < 0) break;
+            
+            String objJson = response.substring(objStart, objEnd + 1);
+            GitHubIssueComment comment;
+            
+            comment.id = extractJsonValue(objJson, "\"id\"").toInt();
+            comment.body = extractJsonValue(objJson, "\"body\"");
+            comment.createdAt = extractJsonValue(objJson, "\"created_at\"");
+            comment.updatedAt = extractJsonValue(objJson, "\"updated_at\"");
+            comment.htmlUrl = extractJsonValue(objJson, "\"html_url\"");
+            
+            // Get author from user object
+            int userStart = objJson.indexOf("\"user\":{");
+            if (userStart >= 0) {
+                int userEnd = objJson.indexOf("}", userStart);
+                String userJson = objJson.substring(userStart + 7, userEnd + 1);
+                comment.author = extractJsonValue(userJson, "\"login\"");
+            }
+            
+            comments.push_back(comment);
+            start = objEnd + 1;
+        }
+    }
+    
+    http.end();
+    return comments;
+}
+
+bool GitHubApp::addIssueComment(const String& owner, const String& repo, int issueNumber, const String& comment) {
+    if (!config.authenticated) {
+        lastError = "Not authenticated";
+        return false;
+    }
+    
+    String url = buildUrl("/repos/" + owner + "/" + repo + "/issues/" + String(issueNumber) + "/comments");
+    
+    String data = "{\"body\":\"" + escapeJson(comment) + "\"}";
+    
+    bool success = makeRequest("POST", url, data);
+    http.end();
+    return success;
+}
+
+std::vector<GitHubLabel> GitHubApp::listLabels(const String& owner, const String& repo) {
+    std::vector<GitHubLabel> labels;
+    
+    if (!config.authenticated) {
+        lastError = "Not authenticated";
+        return labels;
+    }
+    
+    String url = buildUrl("/repos/" + owner + "/" + repo + "/labels");
+    
+    if (makeRequest("GET", url)) {
+        String response = http.getString();
+        // Simple parsing for labels array
+        int start = 0;
+        while (true) {
+            int objStart = response.indexOf("{", start);
+            if (objStart < 0) break;
+            
+            int objEnd = response.indexOf("}", objStart);
+            if (objEnd < 0) break;
+            
+            String objJson = response.substring(objStart, objEnd + 1);
+            GitHubLabel label;
+            
+            label.name = extractJsonValue(objJson, "\"name\"");
+            label.color = extractJsonValue(objJson, "\"color\"");
+            label.description = extractJsonValue(objJson, "\"description\"");
+            
+            labels.push_back(label);
+            start = objEnd + 1;
+        }
+    }
+    
+    http.end();
+    return labels;
+}
+
+bool GitHubApp::addLabelToIssue(const String& owner, const String& repo, int issueNumber, const String& label) {
+    if (!config.authenticated) {
+        lastError = "Not authenticated";
+        return false;
+    }
+    
+    String url = buildUrl("/repos/" + owner + "/" + repo + "/issues/" + String(issueNumber) + "/labels");
+    
+    String data = "[\"" + label + "\"]";
+    
+    bool success = makeRequest("POST", url, data);
+    http.end();
+    return success;
+}
+
+std::vector<String> GitHubApp::getAvailableLabels(const String& owner, const String& repo) {
+    std::vector<String> labelNames;
+    auto labels = listLabels(owner, repo);
+    
+    for (const auto& label : labels) {
+        labelNames.push_back(label.name);
+    }
+    
+    return labelNames;
+}
+
+std::vector<GitHubUser> GitHubApp::listAssignees(const String& owner, const String& repo) {
+    std::vector<GitHubUser> assignees;
+    
+    if (!config.authenticated) {
+        lastError = "Not authenticated";
+        return assignees;
+    }
+    
+    String url = buildUrl("/repos/" + owner + "/" + repo + "/assignees");
+    
+    if (makeRequest("GET", url)) {
+        String response = http.getString();
+        parseUsersArray(response, assignees);
+    }
+    
+    http.end();
+    return assignees;
+}
+
+bool GitHubApp::addAssigneeToIssue(const String& owner, const String& repo, int issueNumber, const String& assignee) {
+    if (!config.authenticated) {
+        lastError = "Not authenticated";
+        return false;
+    }
+    
+    String url = buildUrl("/repos/" + owner + "/" + repo + "/issues/" + String(issueNumber) + "/assignees");
+    
+    String data = "{\"assignees\":[\"" + assignee + "\"]}";
+    
+    bool success = makeRequest("POST", url, data);
+    http.end();
+    return success;
+}
+
+std::vector<String> GitHubApp::getAvailableAssignees(const String& owner, const String& repo) {
+    std::vector<String> assigneeLogins;
+    auto assignees = listAssignees(owner, repo);
+    
+    for (const auto& assignee : assignees) {
+        assigneeLogins.push_back(assignee.login);
+    }
+    
+    return assigneeLogins;
+}
+
+std::vector<GitHubMilestone> GitHubApp::listMilestones(const String& owner, const String& repo) {
+    std::vector<GitHubMilestone> milestones;
+    
+    if (!config.authenticated) {
+        lastError = "Not authenticated";
+        return milestones;
+    }
+    
+    String url = buildUrl("/repos/" + owner + "/" + repo + "/milestones");
+    
+    if (makeRequest("GET", url)) {
+        String response = http.getString();
+        // Simple parsing for milestones array
+        int start = 0;
+        while (true) {
+            int objStart = response.indexOf("{", start);
+            if (objStart < 0) break;
+            
+            int objEnd = response.indexOf("}", objStart);
+            if (objEnd < 0) break;
+            
+            String objJson = response.substring(objStart, objEnd + 1);
+            GitHubMilestone milestone;
+            
+            milestone.number = extractJsonValue(objJson, "\"number\"").toInt();
+            milestone.title = extractJsonValue(objJson, "\"title\"");
+            milestone.description = extractJsonValue(objJson, "\"description\"");
+            milestone.state = extractJsonValue(objJson, "\"state\"");
+            milestone.dueOn = extractJsonValue(objJson, "\"due_on\"");
+            
+            milestones.push_back(milestone);
+            start = objEnd + 1;
+        }
+    }
+    
+    http.end();
+    return milestones;
+}
+
+bool GitHubApp::removeLabelFromIssue(const String& owner, const String& repo, int issueNumber, const String& label) {
+    if (!config.authenticated) {
+        lastError = "Not authenticated";
+        return false;
+    }
+    
+    String url = buildUrl("/repos/" + owner + "/" + repo + "/issues/" + String(issueNumber) + "/labels/" + urlencode(label));
+    
+    bool success = makeRequest("DELETE", url);
+    http.end();
+    return success;
+}
+
+bool GitHubApp::removeAssigneeFromIssue(const String& owner, const String& repo, int issueNumber, const String& assignee) {
+    if (!config.authenticated) {
+        lastError = "Not authenticated";
+        return false;
+    }
+    
+    String url = buildUrl("/repos/" + owner + "/" + repo + "/issues/" + String(issueNumber) + "/assignees/" + assignee);
+    
+    String data = "{\"assignees\":[\"" + assignee + "\"]}";
+    
+    bool success = makeRequest("DELETE", url, data);
+    http.end();
+    return success;
+}
+
+bool GitHubApp::removeMilestoneFromIssue(const String& owner, const String& repo, int issueNumber) {
+    if (!config.authenticated) {
+        lastError = "Not authenticated";
+        return false;
+    }
+    
+    String url = buildUrl("/repos/" + owner + "/" + repo + "/issues/" + String(issueNumber));
+    
+    String data = "{\"milestone\":null}";
+    
+    bool success = makeRequest("PATCH", url, data);
+    http.end();
+    return success;
+}
+
+bool GitHubApp::addMilestoneToIssue(const String& owner, const String& repo, int issueNumber, const String& milestone) {
+    if (!config.authenticated) {
+        lastError = "Not authenticated";
+        return false;
+    }
+    
+    String url = buildUrl("/repos/" + owner + "/" + repo + "/issues/" + String(issueNumber));
+    
+    String data = "{\"milestone\":\"" + milestone + "\"}";
+    
+    bool success = makeRequest("PATCH", url, data);
+    http.end();
+    return success;
+}
+
+bool GitHubApp::editIssueComment(const String& owner, const String& repo, int commentId, const String& comment) {
+    if (!config.authenticated) {
+        lastError = "Not authenticated";
+        return false;
+    }
+    
+    String url = buildUrl("/repos/" + owner + "/" + repo + "/issues/comments/" + String(commentId));
+    
+    String data = "{\"body\":\"" + escapeJson(comment) + "\"}";
+    
+    bool success = makeRequest("PATCH", url, data);
+    http.end();
+    return success;
+}
+
+bool GitHubApp::deleteIssueComment(const String& owner, const String& repo, int commentId) {
+    if (!config.authenticated) {
+        lastError = "Not authenticated";
+        return false;
+    }
+    
+    String url = buildUrl("/repos/" + owner + "/" + repo + "/issues/comments/" + String(commentId));
+    
+    bool success = makeRequest("DELETE", url);
+    http.end();
+    return success;
+}
+
+String GitHubApp::generateIssueFromTemplate(const GitHubIssueTemplate& template, const std::vector<String>& variables) {
+    String content = template.content;
+    
+    // Simple variable replacement
+    for (size_t i = 0; i < variables.size(); i++) {
+        String placeholder = "{{VAR" + String(i + 1) + "}}";
+        content.replace(placeholder, variables[i]);
+    }
+    
+    return content;
+}
+
+std::vector<String> GitHubApp::getAvailableMilestones(const String& owner, const String& repo) {
+    std::vector<String> milestoneTitles;
+    auto milestones = listMilestones(owner, repo);
+    
+    for (const auto& milestone : milestones) {
+        if (milestone.state == "open") {
+            milestoneTitles.push_back(milestone.title);
+        }
+    }
+    
+    return milestoneTitles;
+}
+
+std::vector<GitHubIssueTemplate> GitHubApp::listIssueTemplates(const String& owner, const String& repo) {
+    std::vector<GitHubIssueTemplate> templates;
+    
+    // Note: GitHub's issue templates API is limited
+    // This is a simplified implementation
+    // In practice, you'd need to parse the .github/ISSUE_TEMPLATE directory
+    
+    // Common template names
+    templates.push_back({"Bug Report", "Report a bug", "Describe the bug", "bug"});
+    templates.push_back({"Feature Request", "Suggest a new feature", "Describe the feature", "enhancement"});
+    templates.push_back({"Question", "Ask a question", "What's your question?", "question"});
+    
+    return templates;
+}
+
+String GitHubApp::getIssueTemplateContent(const String& owner, const String& repo, const String& templateName) {
+    // This is a simplified implementation
+    // Real implementation would fetch from GitHub API or local files
+    
+    if (templateName == "Bug Report") {
+        return "## Bug Description\n\nDescribe the bug here.\n\n## Steps to Reproduce\n\n1. Go to '...'\n2. Click on '....'\n3. Scroll down to '....'\n4. See error\n\n## Expected Behavior\n\nDescribe what you expected to happen.\n\n## Screenshots\n\nIf applicable, add screenshots.\n\n## Environment\n\n- Device: [e.g. ESP32, M5Stack]\n- Firmware Version: [e.g. 1.0.0]";
+    } else if (templateName == "Feature Request") {
+        return "## Feature Description\n\nDescribe the feature you'd like to see.\n\n## Problem/Need\n\nWhat problem would this solve?\n\n## Proposed Solution\n\nDescribe your proposed solution.\n\n## Alternative Solutions\n\nDescribe any alternative solutions you've considered.";
+    } else if (templateName == "Question") {
+        return "## Question\n\nWhat's your question?\n\n## Context\n\nProvide additional context for your question.\n\n## What I've Tried\n\nDescribe what you've already tried.";
+    }
+    
+    return "";
+}
+
+String GitHubApp::formatIssueBody(const String& title, const String& description, const String& template) {
+    String body = "";
+    
+    if (template.length() > 0) {
+        body = getIssueTemplateContent("", "", template);
+        if (body.length() > 0) {
+            body.replace("{{TITLE}}", title);
+            body.replace("{{DESCRIPTION}}", description);
+        }
+    }
+    
+    if (body.length() == 0) {
+        body = description;
+    }
+    
+    return body;
+}
+
+bool GitHubApp::validateIssueData(const GitHubIssueCreate& issueData) {
+    // Basic validation
+    if (issueData.title.length() == 0 || issueData.title.length() > 256) {
+        lastError = "Title must be between 1 and 256 characters";
+        return false;
+    }
+    
+    if (issueData.body.length() > 65536) {
+        lastError = "Body cannot exceed 65536 characters";
+        return false;
+    }
+    
+    return true;
+}
+
+String GitHubApp::escapeJson(const String& str) {
+    String escaped = "";
+    for (int i = 0; i < str.length(); i++) {
+        char c = str.charAt(i);
+        switch (c) {
+            case '"': escaped += "\\\""; break;
+            case '\\': escaped += "\\\\"; break;
+            case '\n': escaped += "\\n"; break;
+            case '\r': escaped += "\\r"; break;
+            case '\t': escaped += "\\t"; break;
+            default: escaped += c; break;
+        }
+    }
+    return escaped;
 }
 
 String GitHubApp::getFileContent(const String& owner, const String& repo, const String& path, const String& ref) {
@@ -360,6 +839,64 @@ bool GitHubApp::parseIssueFromJson(const String& json, GitHubIssue& issue) {
     issue.createdAt = extractJsonValue(json, "\"created_at\"");
     issue.updatedAt = extractJsonValue(json, "\"updated_at\"");
     issue.htmlUrl = extractJsonValue(json, "\"html_url\"");
+    
+    // Parse labels array
+    int labelsStart = json.indexOf("\"labels\":[");
+    if (labelsStart >= 0) {
+        int labelsEnd = json.indexOf("]", labelsStart);
+        if (labelsEnd > labelsStart) {
+            String labelsArray = json.substring(labelsStart + 10, labelsEnd);
+            // Simple parsing for label names
+            int labelStart = 0;
+            while (true) {
+                int nameStart = labelsArray.indexOf("\"name\":\"", labelStart);
+                if (nameStart < 0) break;
+                nameStart += 9;
+                int nameEnd = labelsArray.indexOf("\"", nameStart);
+                if (nameEnd > nameStart) {
+                    String labelName = labelsArray.substring(nameStart, nameEnd);
+                    issue.labels.push_back(labelName);
+                }
+                labelStart = nameEnd + 1;
+            }
+        }
+    }
+    
+    // Parse assignees array
+    int assigneesStart = json.indexOf("\"assignees\":[");
+    if (assigneesStart >= 0) {
+        int assigneesEnd = json.indexOf("]", assigneesStart);
+        if (assigneesEnd > assigneesStart) {
+            String assigneesArray = json.substring(assigneesStart + 12, assigneesEnd);
+            // Simple parsing for assignee logins
+            int assigneeStart = 0;
+            while (true) {
+                int loginStart = assigneesArray.indexOf("\"login\":\"", assigneeStart);
+                if (loginStart < 0) break;
+                loginStart += 9;
+                int loginEnd = assigneesArray.indexOf("\"", loginStart);
+                if (loginEnd > loginStart) {
+                    String assigneeLogin = assigneesArray.substring(loginStart, loginEnd);
+                    issue.assignees.push_back(assigneeLogin);
+                }
+                assigneeStart = loginEnd + 1;
+            }
+        }
+    }
+    
+    // Parse milestone
+    int milestoneStart = json.indexOf("\"milestone\":{");
+    if (milestoneStart >= 0) {
+        int milestoneEnd = json.indexOf("}", milestoneStart);
+        if (milestoneEnd > milestoneStart) {
+            String milestoneJson = json.substring(milestoneStart + 12, milestoneEnd);
+            issue.milestone = extractJsonValue(milestoneJson, "\"title\"");
+        }
+    }
+    
+    issue.comments = extractJsonValue(json, "\"comments\"").toInt();
+    issue.isPullRequest = (extractJsonValue(json, "\"pull_request\"") != "");
+    
     return true;
 }
 
