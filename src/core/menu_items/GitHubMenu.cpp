@@ -6,6 +6,7 @@
 #include "core/wifi/webInterface.h"
 #include "modules/github/github_app.h"
 #include "modules/github/github_oauth.h"
+#include "modules/github/github_captive_portal.h"
 
 void GitHubMenu::optionsMenu() {
     returnToMenu = false;
@@ -13,6 +14,7 @@ void GitHubMenu::optionsMenu() {
     
     if (!githubApp.isAuthenticated()) {
         options = {
+            {"Captive Portal", [this]() { startCaptivePortal(); }},
             {"Demo OAuth", [this]() { demoOAuth(); }},
             {"OAuth via AP", [this]() { authOAuthAP(); }},
             {"Manual Token", [this]() { authMenu(); }},
@@ -52,6 +54,51 @@ void GitHubMenu::optionsMenu() {
     }
     
     loopOptions(options, MENU_TYPE_SUBMENU, "GitHub");
+}
+
+void GitHubMenu::startCaptivePortal() {
+    // Start captive portal for PAT token installation
+    if (githubPortal.startPortal()) {
+        githubPortal.startAccessPoint("Bruce-GitHub-Setup");
+        githubPortal.setupPortalRoutes();
+        
+        // Show instructions
+        String info = "GitHub Token Portal Started!\n\n";
+        info += "1. Connect to WiFi: Bruce-GitHub-Setup\n";
+        info += "2. Open browser and go to:\n";
+        info += "   any website or 172.0.0.1\n";
+        info += "3. Enter your GitHub token\n";
+        info += "4. Click 'Save Token'\n\n";
+        info += "Press any key to stop portal";
+        
+        displayInfo(info, true);
+        
+        // Wait for user input or token configuration
+        while (!check(AnyKeyPress)) {
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+            
+            // Check if token was configured via portal
+            if (githubPortal.isTokenConfigured()) {
+                // Try to authenticate with the saved token
+                String token = bruceConfig.githubToken;
+                if (githubApp.begin(token)) {
+                    githubPortal.stopPortal();
+                    githubPortal.stopAccessPoint();
+                    displayInfo("Token configured and authenticated!", true);
+                    return;
+                } else {
+                    displayInfo("Token configured but authentication failed", true);
+                }
+            }
+        }
+        
+        // Stop portal if user pressed key
+        githubPortal.stopPortal();
+        githubPortal.stopAccessPoint();
+        displayInfo("Token portal stopped", true);
+    } else {
+        displayInfo("Failed to start token portal", true);
+    }
 }
 
 void GitHubMenu::authOAuthAP() {

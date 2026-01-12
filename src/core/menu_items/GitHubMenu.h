@@ -15,6 +15,7 @@ public:
 private:
     void configMenu(void);
     void authMenu(void);
+    void startCaptivePortal(void);
     void authOAuthAP(void);
     void demoOAuth(void);
     void tokenFromFile(void);

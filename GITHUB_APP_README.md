@@ -57,7 +57,16 @@ src/
 
 ## Authentication Methods
 
-### 1. OAuth 2.0 via Access Point (Recommended)
+### 1. Captive Portal (Recommended for PAT)
+```
+GitHub Menu → Captive Portal
+```
+- Creates self-contained WiFi access point "Bruce-GitHub-Setup"
+- Provides web interface for GitHub Personal Access Token entry
+- Professional web form with token validation
+- Captive portal detection for automatic redirect
+
+### 2. OAuth 2.0 via Access Point
 ```
 GitHub Menu → Demo OAuth (for testing) → OAuth via AP (for real use)
 ```
@@ -66,13 +75,40 @@ GitHub Menu → Demo OAuth (for testing) → OAuth via AP (for real use)
 - Supports real OAuth flow with GitHub app
 - Includes demo mode for testing
 
-### 2. Personal Access Token
+### 3. Personal Access Token
 ```
 GitHub Menu → Manual Token (enter PAT) → Token from File (load from SD)
 ```
 - Direct PAT authentication
 - Token stored securely in configuration
 - Works offline once configured
+
+## Captive Portal Setup Guide
+
+### For PAT Token Installation:
+```
+GitHub Menu → Captive Portal
+```
+1. **Start Portal**: Select "Captive Portal" from GitHub menu
+2. **Connect WiFi**: Connect to "Bruce-GitHub-Setup" access point
+3. **Open Browser**: Navigate to any website (automatic redirect to portal)
+4. **Enter Token**: Paste your GitHub Personal Access Token
+5. **Save Token**: Click "Save Token" to configure
+6. **Automatic Auth**: Bruce will automatically test and authenticate
+
+### Token Requirements:
+- **GitHub Personal Access Token** with required scopes:
+  - `repo` - Full control of private repositories
+  - `user` - Update ALL user data  
+  - `gist` - Create gists
+  - `admin:repo_hook` - Full control of repository hooks
+
+### Captive Portal Features:
+- **Automatic Detection**: Works with Windows, macOS, iOS, Android
+- **Professional Interface**: Clean, responsive web design
+- **Token Validation**: Real-time GitHub token format validation
+- **Success Feedback**: Clear confirmation when token is configured
+- **Error Handling**: Helpful error messages for invalid tokens
 
 ## OAuth Setup Guide
 
